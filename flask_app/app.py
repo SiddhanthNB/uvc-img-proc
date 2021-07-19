@@ -60,7 +60,7 @@ def input():
 
         before, after = ImageProc.pre_processing(before, after)
         mse, ssi =  ImageProc.compare(before, after)
-        if ssi == 1.00 and mse == 0.00:
+        if ssi == 1.00 or mse == 0.00:
             res = { "status" : "Success",
                 "MSE Value" :  mse ,
                 "SSI Value" : ssi
