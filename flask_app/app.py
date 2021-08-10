@@ -1,9 +1,9 @@
 from skimage import io
-from picamera import PiCamera
+import cv2
 from time import sleep
 import RPi.GPIO as GPIO
-from flask import Flask, redirect, url_for, render_template, request, jsonify
-import json
+from flask import Flask, redirect, url_for, render_template, request, jsonify, session
+#from picamera import PiCamera
 
 from image_processing import ImageProc
 
@@ -11,6 +11,22 @@ GPIO.setwarnings(False)
 #camera = PiCamera()
 
 app = Flask(__name__)
+
+def my_capture(img_name):
+    """camera.start_preview()
+    sleep(5)
+    camera.capture("/home/pi/project/images/{}.jpg".format(img_name))
+    camera.stop_preview()"""
+    
+    cam = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cam.read()
+        img_name = "/home/pi/project/images/{}.jpg".format(img_name)
+        cv2.imwrite(img_name, frame)
+        #print("{} written!".format(img_name))
+        break
+    cam.release()
+    cv2.destroyAllWindows()  
 
 @app.route("/", methods=['GET', 'POST'])
 def home():
@@ -25,8 +41,9 @@ def home():
 @app.route("/input", methods=["POST", "GET"])
 def input():
     if request.method == "POST":
-        time = int(request.form["nm"])
-        """
+        time = float(request.form["nm"])
+        #session["t"] = time
+        
         #relay setup
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(21, GPIO.OUT)
@@ -36,41 +53,34 @@ def input():
         sleep(3)
         
         #trigerring camera
-        camera.start_preview()
-        sleep(5)
-        camera.capture("/home/pi/project/flask_app/images/before.jpg")
-        camera.stop_preview()
+        my_capture("before")
+        
         
         #uvc treatment
-        sleep(1200)
+        sleep(time*60)
         
         #trigerring camera
-        camera.start_preview()
-        sleep(5)
-        camera.capture("/home/pi/project/flask_app/images/after.jpg")
-        camera.stop_preview()
+        my_capture("after")
         
         #setting uvc light off
         sleep(3)
         GPIO.output(21, GPIO.HIGH)
         GPIO.cleanup()
-        """
+        
         return redirect(url_for("output"))
     return render_template("interface.html")
 
 
 @app.route("/output", methods=['GET', 'POST'])
 def output():
-    #reading both images 
-    #before = io.imread("/home/pi/project/flask_app/images/before.jpg")
-    #after = io.imread("/home/pi/project/flask_app/images/after.jpg")
-    before = io.imread("https://raw.githubusercontent.com/SiddhanthNB/uvc-img-proc/main/images/IMG%201.jpg")
-    after = io.imread("https://raw.githubusercontent.com/SiddhanthNB/uvc-img-proc/main/images/IMG%202.jpg")
-    io.imsave("/home/pi/project/flask_app/images/before.jpg", after)
+    #reading both images
+    before = io.imread("/home/pi/project/images/before.jpg")
+    after = io.imread("/home/pi/project/images/after.jpg")
     
     before, after = ImageProc.pre_processing(before, after)
-    io.imsave("/home/pi/project/flask_app/images/edge_before.jpg", before)
-    io.imsave("/home/pi/project/flask_app/images/edge_after.jpg", after)
+    
+    io.imsave("/home/pi/project/images/edge_before_final.jpg", before)
+    io.imsave("/home/pi/project/images/edge_after_final.jpg", after)
     
     mse, ssi =  ImageProc.compare(before, after)
     h_diff = ImageProc.hist_compare(before, after)
@@ -94,9 +104,18 @@ def output():
             "Manhattan norm/pixel": n_m/before.size
             }
         #res = json.dumps(res)
-    
-    #return f"<h2>{result}</h2>"
+
+    if request.method == "POST":
+        #if yes:    
+        return redirect(url_for("images"))
+        
+    #return f"<h2>{result}</h2>"   
     return render_template("dict.html", result=result)
+
+@app.route("/images", methods=['GET', 'POST'])
+def images():
+    return render_template("tmp.html")
+
 
 if __name__ == "__main__":
     app.run(debug=True)
